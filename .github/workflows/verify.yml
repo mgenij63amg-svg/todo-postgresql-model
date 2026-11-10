@@ -1,0 +1,49 @@
+name: Verify Core and PostgreSQL
+
+on:
+  push:
+    branches: [main, feature/homework-13]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: ToDoList
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: ci-only-password
+      PGDATABASE: ToDoList
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Build Core
+        run: dotnet build ToDoList.sln --configuration Release
+      - name: Create schema
+        run: psql -X -v ON_ERROR_STOP=1 -f ToDoListDb.sql
+      - name: Insert test data
+        run: psql -X -v ON_ERROR_STOP=1 -f ToDoListDb_Insert.sql
+      - name: Execute repository selects
+        run: psql -X -v ON_ERROR_STOP=1 -f ToDoListDb_Select.sql
+      - name: Verify database invariants
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/VerifyDatabase.sql
